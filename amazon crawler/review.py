@@ -15,11 +15,11 @@ def getCount(name,url):
     connection  = pymysql.connect(host = 'localhost',
                                   user = 'root',
                                   password = '123456',
-                                  db = 'amazon',
+                                  db = 'amazon_reviews',
                                   charset = 'utf8mb4')
     try:
         with connection.cursor() as cursor:
-            sql = "select * from products where name=(%s)"
+            sql = "select * from nike_products where name=(%s)"
 
             cursor.execute(sql,(name))
             results = cursor.fetchall()
@@ -29,29 +29,37 @@ def getCount(name,url):
     finally:
         connection.close()
     #get basic information about the product
-    html1 = urllib.urlopen(url).read()
-    html1 = str(html1)
-    soup1 = BeautifulSoup(html1,'lxml')
-    productCount = soup1.find_all(attrs={"data-hook":"total-review-count"})
-    productAverageRating = soup1.find_all(attrs={"data-hook":"average-star-rating"})
-    productPrice = soup1.find_all('span',{'class': 'a-color-price arp-price'})
+    while 1:
+        html1 = urllib.urlopen(url).read()
+        html1 = str(html1)
+        soup1 = BeautifulSoup(html1,'lxml')
+        productCount = soup1.find_all(attrs={"data-hook":"total-review-count"})
+        productAverageRating = soup1.find_all(attrs={"data-hook":"average-star-rating"})
+        productPrice = soup1.find_all('span',{'class': 'a-color-price arp-price'})
 
-    if len(productCount[0].string)>3:
-        numbers = productCount[0].string.split(',')
-        count = int(numbers[0])*1000+int(numbers[1])
+        try:
+            if len(productCount[0].string)>3:
+                numbers = productCount[0].string.split(',')
+                count = int(numbers[0])*1000+int(numbers[1])
+            else:
+                count = int(productCount[0].string)
+            averageRating = productAverageRating[0].string
+           
+            break
+        except:
+            continue
+    if len(productPrice):
+        price = productPrice[0].string
     else:
-        count = int(productCount[0].string)
-    averageRating = productAverageRating[0].string
-    price = productPrice[0].string
-
+        price = -1
     connection  = pymysql.connect(host = 'localhost',
                                   user = 'root',
                                   password = '123456',
-                                  db = 'amazon',
+                                  db = 'amazon_reviews',
                                   charset = 'utf8mb4')
     try:
         with connection.cursor() as cursor:
-            sql = "insert into `products` (name,price,totalReviewCount,averageRating) values (%s,%s,%s,%s)"
+            sql = "insert into `nike_products` (name,price,totalReviewCount,averageRating) values (%s,%s,%s,%s)"
 
             cursor.execute(sql,(name,price,count,averageRating))
 
@@ -63,16 +71,24 @@ def getCount(name,url):
     return count
     
 def crawler(name,url):
-    html1 = urllib.urlopen(url).read()
-    html1 = str(html1)
+    tryCrawl = 1
+    while 1:
+        print("{} try".format(tryCrawl))
+        tryCrawl+=1
+        html1 = urllib.urlopen(url).read()
+        html1 = str(html1)
 
-    soup1 = BeautifulSoup(html1,'lxml')
-    reviewAuthor = soup1.find_all(attrs={"data-hook":"review-author"})
-    reviewDate = soup1.find_all(attrs={"data-hook":"review-date"})
-    reviewText = soup1.find_all(attrs={"data-hook":"review-body"})
-    reviewRating = soup1.find_all(attrs={"data-hook":"review-star-rating"})
-    reviewTitle = soup1.find_all(attrs={"data-hook":"review-title"})
-    
+        soup1 = BeautifulSoup(html1,'lxml')
+        reviewAuthor = soup1.find_all(attrs={"data-hook":"review-author"})
+        reviewDate = soup1.find_all(attrs={"data-hook":"review-date"})
+        reviewText = soup1.find_all(attrs={"data-hook":"review-body"})
+        reviewRating = soup1.find_all(attrs={"data-hook":"review-star-rating"})
+        reviewTitle = soup1.find_all(attrs={"data-hook":"review-title"})
+        try:
+            test = reviewText[0].string
+            break
+        except:
+            continue
 
     index = 0
     for cTime in reviewDate:
@@ -87,11 +103,11 @@ def crawler(name,url):
         connection  = pymysql.connect(host = 'localhost',
                                   user = 'root',
                                   password = '123456',
-                                  db = 'amazon',
+                                  db = 'amazon_reviews',
                                   charset = 'utf8mb4')
         try:
             with connection.cursor() as cursor:
-                sql = "insert into `reviews` (comment,date,rating,title,author,productName) values (%s,%s,%s,%s,%s,%s)"
+                sql = "insert into `nike_reviews` (comment,date,rating,title,author,productName) values (%s,%s,%s,%s,%s,%s)"
 
                 cursor.execute(sql,(text,commentTime,rating,title,author,name))
 
@@ -101,6 +117,8 @@ def crawler(name,url):
             continue
         finally:
             connection.close()
+            
+    return len(reviewText)
 
 
 links = []
@@ -129,4 +147,5 @@ for i in range(1,len(links)):
         for j in range(1,page):
             print("downloading reviews from page{}...".format(j))
             productUrl =url + "&pageNumber="+str(j)
-            crawler(productName,productUrl)
+            if crawler(productName,productUrl)<10:
+                break
